@@ -35,7 +35,7 @@ $base = "vmware"
 $carbonServer = "192.168.1.54"
 $carbonServerPort = 2003
 
-$ESXiMetricCounters = "cpu.*","mem.*","net.*","disk.*","datastore.*","storage*"
+$ESXiMetricCounters = "cpu.*","mem.*","net.*","disk.*","datastore.*","storage*","sys.uptime.latest"
 
 try
     {
@@ -76,54 +76,6 @@ function Send-ToGraphite {
         }
 }
 
-#function Get-VMGuestStats {
-# $a = Get-VM | ? {$_.PowerState -eq "PoweredON"} 
-# $a| % { Write-Host $_ ; Get-Stat -Entity $_ -Realtime -MaxSamples 1 -stat * | Sort-Object -Property metricID | ft -AutoSize
-# Test-WF -vmserver $a -vcenter ($global:DefaultVIServer).Name -session ($global:DefaultVIServer).SessionSecret
-Workflow Get-VMGuestStats {
-    param(
-        [string]$vcenter,
-        [string[]]$vmserver,
-        [string]$session,
-        [Switch]$Print
-    )
-    foreach -parallel ($name in $vmserver){
-      $vm = InlineScript{
-            Add-PSSnapin VMware.VimAutomation.Core
-            $WarningPreference = "SilentlyContinue";
-            (Connect-VIServer -Server $Using:vcenter -Session $Using:session) 2>&1 | out-null
-            $WarningPreference = "Continue"; 
-            #$vmStats = Get-Stat -Entity $Using:name -Realtime -MaxSamples 1 -stat "*"
-            $vmStats = Get-Stat -Entity $Using:name -IntervalSecs 1 -MaxSamples 3 -stat "*"
-            $countvmMetrics = 0
-            foreach($stat in $vmStats){
-                $time = $stat.Timestamp
-                $date = [int][double]::Parse((Get-Date -Date $time -UFormat %s))
-                $metric = ($stat.MetricId).Replace(".latest","").split(".")
-                $value = $stat.Value
-                $unit = ($stat.Unit).Replace("%","Percent")
-                $instance = ($stat.instance).Split(".,/,_,:")[-1]
-                $vmName = $($Using:name).Replace(" ","-").Replace(".","-").Replace(")","").Replace("(","").ToLower()
-                if($instance -and $metric[0] -ne "sys"){
-                 $result = "1 vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$instance.$($metric[2])$unit $value $date"}
-                elseif($metric[0] -eq "sys" -and $instance){
-                 $result = "2 vmware.vm.$($vmName).$($metric[0]).$($metric[1])_$($instance).$unit $value $date"}
-                else {
-                 $result = "3 vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$($metric[2])$unit $value $date"}
-                 if($Using:Print){
-                 Write-Output $result}
-                 $vmMetrics += $result
-                 $countvmMetrics = $countvmMetrics + 1
-               }
-                 Write-Output "-- VM Metrics      : $countvmMetrics"
-             }
-        $vm
-        }
-
-   }
-
-#}
-
 function Get-VMHostStats {
     Param
     (
@@ -147,7 +99,6 @@ function Get-VMHostStats {
         foreach($stat in $vmhStats)
            {
             $time = $stat.Timestamp
-       #     $date = [int][double]::Parse((Get-Date -Date $time -UFormat %s))
             $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
             $metric = ($stat.MetricId).Replace(".latest","").split(".")
             $value = $stat.Value
@@ -302,8 +253,8 @@ while ($true)
         $VMHostTimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextVMHostRun
      #   Write-Output "Metric receive at: $global:VMHostMetricTime -- $nextVMHostRun -- $VMHostTimeDiff -- Next collection in $($VMHostTimeDiff.TotalSeconds) seconds"
     }
-   
-    if ([int]$($VMHostTimeDiff.TotalSeconds) -le 0) {}
+
+ if ([int]$($VMHostTimeDiff.TotalSeconds) -le 0) {}
     else {
         Write-Output "Sleeping $($VMHostTimeDiff.TotalSeconds) seconds"
         sleep $($VMHostTimeDiff.TotalSeconds)
