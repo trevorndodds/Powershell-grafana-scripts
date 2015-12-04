@@ -5,10 +5,13 @@ Param
                    Position=0)]
         
         [switch]$Print,
-        [switch]$Serial
+        [switch]$Serial,
+        [switch]$Parallel,
+        [switch]$Batch
     )
 
 $carbonServer = "192.168.1.54"
+$carbonServerPort = 2003
 $Credfile = ".\Windowscreds.xml"
 $base = "vmware"
 
@@ -116,8 +119,6 @@ Workflow Get-VMGuestStats {
 #### Test SerialTime to Collect VMs
 
 
-            $carbonServer = "192.168.1.54"
-            $carbonServerPort = 2003
 
  function Send-ToGraphite {
 param(
@@ -133,6 +134,7 @@ param(
         $writer = new-object System.IO.StreamWriter($stream)
         foreach ($metric in $metrics){
             $newMetric = $metric.TrimEnd()
+        #    write-host $newMetric
             $writer.WriteLine($newMetric)
             }
         $writer.Flush()
@@ -187,12 +189,70 @@ function Get-VMGuestStatsSerial {
 }
 
 
+function Get-VMGuestStatsBatch {
+  param(
+        [Switch]$Print
+    )
+    $VMs = Get-VM | ? {$_.PowerState -eq "PoweredON"}
+    $result = "vmware.perf.PoweredOn $($VMs.count) $([int][double]::Parse((Get-Date (Get-Date).ToUniversalTime() -UFormat %s)))"
+    Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $result
+
+            $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+            $vmStats = Get-Stat -Entity $VMs -IntervalSecs 1 -MaxSamples 4 -stat "*"
+            "Total Elapsed Time getting vmStats: $($elapsed.Elapsed.ToString())"
+            $countvmMetrics = 0
+            #[string[]$vmMetrics = @()
+            $vmMetrics = New-Object System.Collections.ArrayList
+            foreach($stat in $vmStats){
+                    $time = $stat.Timestamp
+                    $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
+                    $metric = ($stat.MetricId).Replace(".latest","").split(".")
+                    $value = $stat.Value
+                    $unit = ($stat.Unit).Replace("%","Percent")
+                    $instance = ($stat.instance).Split(".,/,_,:")[-1]
+                    $vmName = ($stat.Entity).toString().Replace(" ","-").Replace(".","-").Replace(")","").Replace("(","").ToLower()
+                    if($instance -and $metric[0] -ne "sys"){
+                     $result = "vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$instance.$($metric[2])$unit $value $date"}
+                    elseif($metric[0] -eq "sys" -and $instance){
+                     $result = "vmware.vm.$($vmName).$($metric[0]).$($metric[1])_$($instance).$unit $value $date"}
+                    else {
+                     $result = "vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$($metric[2])$unit $value $date"}
+                     if($Print){
+                     Write-Output $result}
+                    # $vmMetrics += $result
+                     $vmMetrics.Add($result) | out-null
+#                     "Total Elapsed Time adding to result metrics: $($elapsed.Elapsed.ToString())"
+                     $countvmMetrics++
+                   }
+                "Total Elapsed Time converting metrics: $($elapsed.Elapsed.ToString())"
+                Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $vmMetrics
+                "Total Elapsed Time all: $($elapsed.Elapsed.ToString())"
+                Write-Output "-- VM Metrics      : $countvmMetrics"
+
+}
+
+
+
 
 #######
 #Start Jobs
 while ($true)
 {
 
+
+if($Batch){
+    if ((get-date) -ge $nextVMRun){
+        $nextVMRun = (get-date -second 00).AddMinutes(1)
+        $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+            if($Print){
+                        Get-VMGuestStatsBatch -Print
+                    }
+                else {Get-VMGuestStatsBatch}
+        "Total Elapsed Time VM Guests: $($elapsed.Elapsed.ToString())"
+        $VMHostTimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextVMRun
+        }
+
+}
 
 
 if($Serial){
@@ -208,7 +268,8 @@ if($Serial){
         $VMHostTimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextVMRun
         }
     }
-    else {
+    
+if($Parallel) {
     #VM Metrics (20 seconds apart)
     #get VMs
     if ((get-date) -ge $nextVMRun)
