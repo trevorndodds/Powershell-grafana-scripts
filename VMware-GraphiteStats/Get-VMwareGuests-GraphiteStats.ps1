@@ -8,7 +8,7 @@ Param
         [switch]$Serial
     )
 
-
+$carbonServer = "192.168.1.54"
 $Credfile = ".\Windowscreds.xml"
 $base = "vmware"
 
@@ -56,9 +56,7 @@ Workflow Get-VMGuestStats {
                     $stream = $socket.GetStream() 
                     $writer = new-object System.IO.StreamWriter($stream)
                     foreach ($metric in $metrics){
-                        #Write-Output $metric
                         $newMetric = $metric.TrimEnd()
-                        #Write-Output $newMetric
                         $writer.WriteLine($newMetric)
                         }
                     $writer.Flush()
@@ -76,7 +74,6 @@ Workflow Get-VMGuestStats {
             (Connect-VIServer -Server $Using:vcenter -Session $Using:session) 2>&1 | out-null
             $WarningPreference = "Continue"; 
             "Total Elapsed Time Connecting: $($elapsed.Elapsed.ToString())"
-            #$vmStats = Get-Stat -Entity $Using:name -Realtime -MaxSamples 1 -stat "*"
             $vmStats = Get-Stat -Entity $Using:name -IntervalSecs 1 -MaxSamples 3 -stat "*"
             $countvmMetrics = 0
             [string[]]$vmMetrics = @()
@@ -106,54 +103,56 @@ Workflow Get-VMGuestStats {
             Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $vmMetrics
            # Write-Output "-- VM Metrics      : $countvmMetrics"
              }
-       # $vm
+        $vm
         }
-
+       $carbonServer = "192.168.1.54"
+       $carbonServerPort = 2003
+       $result = "vmware.perf.PoweredOn $($vmserver.count) $([int][double]::Parse((Get-Date (Get-Date).ToUniversalTime() -UFormat %s)))"
+       Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $result
    }
 
 #}
 
 #### Test SerialTime to Collect VMs
 
-Add-PSSnapin VMware.VimAutomation.Core
 
-            $carbonServer = "10.28.52.162"
+            $carbonServer = "192.168.1.54"
             $carbonServerPort = 2003
 
-            function Send-ToGraphite {
-                param(
-                    [string]$carbonServer,
-                    [string]$carbonServerPort,
-                    [string[]]$metrics
-                )
-                    try
-                    {
-                    $socket = New-Object System.Net.Sockets.TCPClient 
-                    $socket.connect($carbonServer, $carbonServerPort) 
-                    $stream = $socket.GetStream() 
-                    $writer = new-object System.IO.StreamWriter($stream)
-                    foreach ($metric in $metrics){
-                        #Write-Output $metric
-                        $newMetric = $metric.TrimEnd()
-                        #Write-Output $newMetric
-                        $writer.WriteLine($newMetric)
-                        }
-                    $writer.Flush()
-                    $writer.Close() 
-                    $stream.Close()
-                    }
-                    catch
-                    {
-                        Write-Error $_
-                    }
+ function Send-ToGraphite {
+param(
+        [string]$carbonServer,
+        [string]$carbonServerPort,
+        [string[]]$metrics
+    )
+        try
+        {
+        $socket = New-Object System.Net.Sockets.TCPClient 
+        $socket.connect($carbonServer, $carbonServerPort) 
+        $stream = $socket.GetStream() 
+        $writer = new-object System.IO.StreamWriter($stream)
+        foreach ($metric in $metrics){
+            $newMetric = $metric.TrimEnd()
+            $writer.WriteLine($newMetric)
             }
+        $writer.Flush()
+        $writer.Close() 
+        $stream.Close()
+        }
+        catch
+        {
+            Write-Error $_
+        }
+}
 
 
 function Get-VMGuestStatsSerial {
   param(
         [Switch]$Print
     )
-    $VMs = Get-VM | ? {$_.PowerState -eq "PoweredON"} 
+    $VMs = Get-VM | ? {$_.PowerState -eq "PoweredON"}
+    $result = "vmware.perf.PoweredOn $($VMs.count) $([int][double]::Parse((Get-Date (Get-Date).ToUniversalTime() -UFormat %s)))"
+    Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $result
         foreach ($vm in $VMs){
         $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
             $vmStats = Get-Stat -Entity $vm -IntervalSecs 1 -MaxSamples 4 -stat "*"
@@ -222,7 +221,7 @@ if($Serial){
                     }
                 else {Get-VMGuestStats -vmserver $VMs -vcenter ($global:DefaultVIServer).Name -session ($global:DefaultVIServer).SessionSecret}
 
-        "Total Elapsed Time VM Guests: $($elapsed.Elapsed.ToString())"
+        "Total Elapsed Time VM Guests: $($elapsed.ElapsedMilliseconds)"
         $VMHostTimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextVMRun
      #   Write-Output "Metric receive at: $global:VMHostMetricTime -- $nextVMHostRun -- $VMHostTimeDiff -- Next collection in $($VMHostTimeDiff.TotalSeconds) seconds"
     }
