@@ -92,7 +92,7 @@ function Get-VMHostStats {
     # Collect get-stat for VMHosts #Changes every 300s
     $vmhosts = (Get-VMHost -Location $cluster) | sort
     foreach ($VMhost in $vmhosts){
-        [string[]]$hostMetrics = @()
+        $hostMetrics = New-Object System.Collections.ArrayList
         $datacenter = (Get-Datacenter -VMHost $VMhost).Name.ToLower()
         $vmhStats = Get-Stat -Entity (Get-VMHost "$VMhost") -IntervalSecs 1 -MaxSamples 3 -stat $ESXiMetricCounters
         Write-Output $VMhost.Name
@@ -118,8 +118,8 @@ function Get-VMHostStats {
              if($Print){
                 Write-Output $result
             }
-            $hostMetrics += $result
-            $countESXiMetrics = $countESXiMetrics + 1
+            $hostMetrics.Add($result) | out-null
+            $countESXiMetrics++
      #       $global:VMHostMetricTime = $time
            }
      #      Write-Host $hostMetrics.Count
@@ -145,7 +145,7 @@ function Get-ClusterStats {
     foreach ($cluster in $clusters){
         $countClusterMetrics = 0
         [string[]]$clusterMetrics = @()
-        $clsStats = Get-Stat -Entity (Get-Cluster "$cluster") -Realtime -MaxSamples 7 -stat "cpu.*","mem.*" | Sort-Object Timestamp
+        $clsStats = Get-Stat -Entity (Get-Cluster "$cluster") -Realtime -MaxSamples 2 -stat "cpu.*","mem.*" | Sort-Object Timestamp
         Write-Output $cluster.Name
         foreach($stat in $clsStats)
            {
@@ -168,7 +168,7 @@ function Get-ClusterStats {
             
             if($Print){
                 Write-Output "$result"}
-            $countClusterMetrics = $countClusterMetrics + 1
+            $countClusterMetrics++
 
            }
         Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $clusterMetrics 
@@ -193,7 +193,7 @@ function Get-DataCenterStats {
     $datacenters = (Get-Datacenter) | sort
     foreach ($datacenter in $datacenters){
         [string[]]$dcMetrics = @()
-        $dcStats = Get-Stat -Entity (Get-DataCenter $datacenter) -Realtime -MaxSamples 7  -stat "*"
+        $dcStats = Get-Stat -Entity (Get-DataCenter $datacenter) -Realtime -MaxSamples 1  -stat "*"
         Write-Output $datacenter.Name
         $dcName = ($datacenter.Name).tolower()
         foreach($stat in $dcStats)
@@ -231,7 +231,8 @@ while ($true)
             else {Get-DataCenterStats}
         "Total Elapsed Time Cluster: $($elapsed.Elapsed.ToString())"
         #calculate difference 
-        $nextClusterRun = ($global:clusterMetricTime).AddMinutes(30)
+        $nextClusterRun = ($global:clusterMetricTime).AddSeconds(340)
+     #   $nextClusterRun = (get-date).AddSeconds(300)
         $ClustertimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextClusterRun
         Write-Output "Metric receive at: $global:clusterMetricTime -NextRun- $nextClusterRun -TimeDiff- $ClustertimeDiff -- Next collection in $($ClustertimeDiff.TotalSeconds) seconds"
     }
