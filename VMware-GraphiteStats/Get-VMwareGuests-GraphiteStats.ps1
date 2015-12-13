@@ -15,18 +15,22 @@ $carbonServerPort = 2003
 $Credfile = ".\Windowscreds.xml"
 $base = "vmware"
 
-try
-    {
-    Add-PSSnapin VMware.VimAutomation.Core
+function Connect-TovCenter {
+    try
+        {
+        Add-PSSnapin VMware.VimAutomation.Core
 
-    Get-VICredentialStoreItem -File $Credfile | %{
-    $VIConnection = Connect-VIServer -Server $_.host -User $_.User -Password $_.Password}
-    }
-catch
-    {
-    Write-Error $_
-    }
+        Get-VICredentialStoreItem -File $Credfile | %{
+        $VIConnection = Connect-VIServer -Server $_.host -User $_.User -Password $_.Password}
+        }
+    catch
+        {
+        Write-Error $_
+        }
 
+}
+
+Connect-TovCenter
 
     #function Get-VMGuestStats {
 # $a = Get-VM | ? {$_.PowerState -eq "PoweredON"} 
@@ -198,10 +202,8 @@ function Get-VMGuestStatsBatch {
     Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $result
 
             $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
-            $vmStats = Get-Stat -Entity $VMs -IntervalSecs 1 -MaxSamples 4 -stat "*"
+            $vmStats = Get-Stat -Entity $VMs -IntervalSecs 1 -MaxSamples 3 -stat "*"
             "Total Elapsed Time getting vmStats: $($elapsed.Elapsed.ToString())"
-            $countvmMetrics = 0
-            #[string[]$vmMetrics = @()
             $vmMetrics = New-Object System.Collections.ArrayList
             foreach($stat in $vmStats){
                     $time = $stat.Timestamp
@@ -219,17 +221,17 @@ function Get-VMGuestStatsBatch {
                      $result = "vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$($metric[2])$unit $value $date"}
                      if($Print){
                      Write-Output $result}
-                    # $vmMetrics += $result
                      $vmMetrics.Add($result) | out-null
-#                     "Total Elapsed Time adding to result metrics: $($elapsed.Elapsed.ToString())"
-                     $countvmMetrics++
+                   #  "Total Elapsed Time adding to result metrics: $($elapsed.Elapsed.ToString())"
                    }
                 "Total Elapsed Time converting metrics: $($elapsed.Elapsed.ToString())"
                 Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $vmMetrics
+                $vmMetrics | Out-File .\data.out
                 "Total Elapsed Time all: $($elapsed.Elapsed.ToString())"
-                Write-Output "-- VM Metrics      : $countvmMetrics"
+                Write-Output "-- VM Metrics      : $($vmMetrics.Count)"
 
 }
+
 
 
 
@@ -238,6 +240,9 @@ function Get-VMGuestStatsBatch {
 #Start Jobs
 while ($true)
 {
+
+if(!($Serial -or $Parallel))
+    {$Batch = $true}
 
 
 if($Batch){
