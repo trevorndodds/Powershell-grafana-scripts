@@ -45,7 +45,7 @@ Workflow Get-VMGuestStats {
     )
     foreach -parallel -ThrottleLimit 4 ($name in $vmserver){
       $vm = InlineScript  {
-            Add-PSSnapin VMware.VimAutomation.Core
+            if (-not (Get-PSSnapin VMware.VimAutomation.Core -ErrorAction SilentlyContinue)) {Add-PSSnapin VMware.VimAutomation.Core}
 
             $carbonServer = "192.168.1.54"
             $carbonServerPort = 2003
@@ -77,14 +77,11 @@ Workflow Get-VMGuestStats {
             }
 
             $WarningPreference = "SilentlyContinue";
-            $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
             (Connect-VIServer -Server $Using:vcenter -Session $Using:session) 2>&1 | out-null
             $WarningPreference = "Continue"; 
-            "Total Elapsed Time Connecting: $($elapsed.Elapsed.ToString())"
             $vmStats = Get-Stat -Entity $Using:name -IntervalSecs 1 -MaxSamples 3 -stat "*"
             $countvmMetrics = 0
             [string[]]$vmMetrics = @()
-            $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
             foreach($stat in $vmStats){
                     $time = $stat.Timestamp
                     $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
@@ -105,7 +102,6 @@ Workflow Get-VMGuestStats {
                      $countvmMetrics = $countvmMetrics + 1
                    }
                   # Write-Output $vmMetrics
-                #  "Total Elapsed Time getting metrics: $($elapsed.Elapsed.ToString())"
                  # Write-Output $vmMetrics.count
             Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $vmMetrics
            # Write-Output "-- VM Metrics      : $countvmMetrics"
@@ -226,7 +222,7 @@ function Get-VMGuestStatsBatch {
                    }
                 "Total Elapsed Time converting metrics: $($elapsed.Elapsed.ToString())"
                 Send-ToGraphite -carbonServer $carbonServer -carbonServerPort $carbonServerPort -metric $vmMetrics
-                $vmMetrics | Out-File .\data.out
+              #  $vmMetrics | Out-File .\data.out
                 "Total Elapsed Time all: $($elapsed.Elapsed.ToString())"
                 Write-Output "-- VM Metrics      : $($vmMetrics.Count)"
 
@@ -287,7 +283,8 @@ if($Parallel) {
                     }
                 else {Get-VMGuestStats -vmserver $VMs -vcenter ($global:DefaultVIServer).Name -session ($global:DefaultVIServer).SessionSecret}
 
-        "Total Elapsed Time VM Guests: $($elapsed.ElapsedMilliseconds)"
+        #"Total Elapsed Time VM Guests: $($elapsed.ElapsedMilliseconds)"
+        "Total Elapsed Time VM Guests: $($elapsed.Elapsed.ToString())"
         $VMHostTimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextVMRun
      #   Write-Output "Metric receive at: $global:VMHostMetricTime -- $nextVMHostRun -- $VMHostTimeDiff -- Next collection in $($VMHostTimeDiff.TotalSeconds) seconds"
     }
