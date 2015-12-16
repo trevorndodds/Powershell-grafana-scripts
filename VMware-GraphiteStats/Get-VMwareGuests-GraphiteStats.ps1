@@ -201,9 +201,17 @@ function Get-VMGuestStatsBatch {
             $vmStats = Get-Stat -Entity $VMs -IntervalSecs 1 -MaxSamples 3 -stat "*"
             "Total Elapsed Time getting vmStats: $($elapsed.Elapsed.ToString())"
             $vmMetrics = New-Object System.Collections.ArrayList
+            $tdHash = @{}
             foreach($stat in $vmStats){
                     $time = $stat.Timestamp
-                    $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
+                    if ($tdHash.ContainsKey($time)){
+                        $date = $tdHash.item($time)
+                    }
+                    else {
+                        $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
+                        Write-Output "Adding $date to Hash Map"
+                        $tdHash.Add($time, $date)
+                    }
                     $metric = ($stat.MetricId).Replace(".latest","").split(".")
                     $value = $stat.Value
                     $unit = ($stat.Unit).Replace("%","Percent")
