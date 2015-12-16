@@ -96,10 +96,17 @@ function Get-VMHostStats {
         $datacenter = (Get-Datacenter -VMHost $VMhost).Name.ToLower()
         $vmhStats = Get-Stat -Entity (Get-VMHost "$VMhost") -IntervalSecs 1 -MaxSamples 3 -stat $ESXiMetricCounters
         Write-Output $VMhost.Name
-        foreach($stat in $vmhStats)
-           {
+        $tdHash = @{}
+        foreach($stat in $vmhStats){
             $time = $stat.Timestamp
-            $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
+            if ($tdHash.ContainsKey($time)){
+                $date = $tdHash.item($time)
+            }
+            else {
+                $date = [int][double]::Parse((Get-Date (Get-Date $time).ToUniversalTime() -UFormat %s))
+                Write-Output "Adding $date to Hash Map"
+                $tdHash.Add($time, $date)
+            }
             $metric = ($stat.MetricId).Replace(".latest","").split(".")
             $value = $stat.Value
             $unit = ($stat.Unit).Replace("%","Percent")
