@@ -125,7 +125,7 @@ function Get-VMHostStats {
              if($Print){
                 Write-Output $result
             }
-            $hostMetrics.Add($result) | out-null
+            [void]$hostMetrics.Add($result)
             $countESXiMetrics++
      #       $global:VMHostMetricTime = $time
            }
