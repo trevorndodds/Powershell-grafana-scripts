@@ -225,7 +225,7 @@ function Get-VMGuestStatsBatch {
                      $result = "vmware.vm.$($vmName).$($metric[0])_$($metric[1]).$($metric[2])$unit $value $date"}
                      if($Print){
                      Write-Output $result}
-                     $vmMetrics.Add($result) | out-null
+                     [void]$vmMetrics.Add($result)
                    #  "Total Elapsed Time adding to result metrics: $($elapsed.Elapsed.ToString())"
                    }
                 "Total Elapsed Time converting metrics: $($elapsed.Elapsed.ToString())"
