@@ -13,9 +13,9 @@ $elasticIndex = "trev_test"
 $elasticServer = ""
 $elasticServerPort = 9200
 $indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
-$interval = 20
+$interval = 10
 
-$redisServer = "serverName"
+[string[]]$redisServers = "",""
 $redisKey = "metricbeat"
 
 function SendTo-ElasticSearch ($metrics, $elasticServer, $elasticServerPort, $elasticIndex, $indexDate)
@@ -26,7 +26,6 @@ function SendTo-ElasticSearch ($metrics, $elasticServer, $elasticServerPort, $el
     Invoke-RestMethod "http://$elasticServer`:$elasticServerPort/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
 }
 
-
 function Get-RedisLLEN ($redisServer, $redisKey)
 {
        try
@@ -36,6 +35,7 @@ function Get-RedisLLEN ($redisServer, $redisKey)
            $redisMetricsRedis.Add("length", [int]$result)
            $redisMetricsRedis.Add("key",$redisKey)
            $redisMetrics.Add("redis",$redisMetricsRedis)
+           $redisMetrics.Add("@timestamp",[DateTime]::Now.ToUniversalTime().ToString("o"))
 
            SendTo-ElasticSearch $redisMetrics $elasticServer $elasticServerPort $elasticIndex $indexDate
 
@@ -44,9 +44,7 @@ function Get-RedisLLEN ($redisServer, $redisKey)
        {
            Write-Host "Error exception - $_"
        }
-    
 }
-
 
 #StartJob
 while ($true)
@@ -55,19 +53,15 @@ while ($true)
     {
         $nextRun = (get-date).AddSeconds($interval)
         $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
-            if($Print){
-                        $redisMetrics = @{}
-                        $redisMetricsHost = @{}
-                        $redisMetricsHost.Add("hostname",$redisServer)
-                        $redisMetrics.Add("beat",$redisMetricsHost)
-                        Get-RedisLLEN $redisServer $redisKey
-                    }
+            if($Print){                                     }
                 else {
-                    $redisMetrics = @{}
-                        $redisMetricsHost = @{}
-                        $redisMetricsHost.Add("hostname",$redisServer)
-                        $redisMetrics.Add("beat",$redisMetricsHost)
-                        Get-RedisLLEN $redisServer $redisKey
+
+                        foreach ($redisServer in $redisServers){
+                            $redisMetrics = @{}
+                            $redisMetricsHost = @{}
+                            $redisMetricsHost.Add("hostname",$redisServer)
+                            $redisMetrics.Add("beat",$redisMetricsHost)
+                            Get-RedisLLEN $redisServer $redisKey }
                 }
 
 		"Total Elapsed Time: $($elapsed.Elapsed.ToString())"
