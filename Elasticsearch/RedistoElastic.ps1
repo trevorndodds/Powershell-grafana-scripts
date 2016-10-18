@@ -12,7 +12,6 @@ Param
 $elasticIndex = "trev_test"
 $elasticServer = ""
 $elasticServerPort = 9200
-$indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
 $interval = 10
 
 [string[]]$redisServers = "",""
@@ -28,6 +27,7 @@ function SendTo-ElasticSearch ($metrics, $elasticServer, $elasticServerPort, $el
 
 function Get-RedisLLEN ($redisServer, $redisKey)
 {
+       $indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
        try
        {
            $result = ./redis-cli.exe -h $redisServer llen $redisKey
