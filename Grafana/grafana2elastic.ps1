@@ -4,7 +4,6 @@
      $elasticIndex = "grafana"
      $elasticServer = "server1"
      $elasticServerPort = 9200
-     $indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
 
      function SendTo-Elasticsearch ($json, $elasticServer, $elasticServerPort, $elasticIndex, $indexDate)
      {
@@ -20,6 +19,8 @@
 
      function Get-GrafanaMetrics ($grafanaServer)
      {
+        $indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
+
          try
          {
              $a = Invoke-RestMethod -Uri "http://$grafanaServer`:$grafanaServerPort/api/metrics"
