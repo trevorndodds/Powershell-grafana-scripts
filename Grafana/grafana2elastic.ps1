@@ -1,61 +1,64 @@
-     [string[]]$grafanaServers = "localhost"
-     $grafanaServerPort = 3000
-     $interval = 60
-     $elasticIndex = "grafana"
-     $elasticServer = "server1"
-     $elasticServerPort = 9200
+#Requires -Version 3.0
+# Can be installed as a windows service using nssm: https://nssm.cc
 
-     function SendTo-Elasticsearch ($json, $elasticServer, $elasticServerPort, $elasticIndex, $indexDate)
-     {
-         try
-         {
-            Invoke-RestMethod "http://$elasticServer`:$elasticServerPort/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
-         }
-            catch [System.Exception]
-            {
-                Write-Host "SendTo-Elasticsearch exception - $_"
-            } 
-     }
+[string[]]$grafanaServers = "localhost"
+$grafanaServerPort = 3000
+$interval = 60
+$elasticIndex = "grafana"
+$elasticServer = "server1"
+$elasticServerPort = 9200
 
-     function Get-GrafanaMetrics ($grafanaServer)
-     {
-        $indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
+function SendTo-Elasticsearch ($json, $elasticServer, $elasticServerPort, $elasticIndex, $indexDate)
+{
+ try
+ {
+    Invoke-RestMethod "http://$elasticServer`:$elasticServerPort/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
+ }
+    catch [System.Exception]
+    {
+	Write-Host "SendTo-Elasticsearch exception - $_"
+    } 
+}
 
-         try
-         {
-             $a = Invoke-RestMethod -Uri "http://$grafanaServer`:$grafanaServerPort/api/metrics"
-             $b = $a | ConvertTo-Json | % { $_ -replace '\.(?=[a-z])',"_" }
-             $c = ConvertFrom-Json -InputObject $b
-             $c | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
-             $c | add-member -Name "server" -Value $grafanaServer -MemberType NoteProperty
-             $json = $c | convertTo-json
+function Get-GrafanaMetrics ($grafanaServer)
+{
+$indexDate = [DateTime]::UtcNow.ToString("yyyy.MM.dd")
 
-        SendTo-Elasticsearch $json $elasticServer $elasticServerPort $elasticIndex $indexDate
-    }
-       catch [System.Exception]
-       {
-           Write-Host "Get-GrafanaMetrics exception - $_"
-       } 
-     }
+ try
+ {
+     $a = Invoke-RestMethod -Uri "http://$grafanaServer`:$grafanaServerPort/api/metrics"
+     $b = $a | ConvertTo-Json | % { $_ -replace '\.(?=[a-z])',"_" }
+     $c = ConvertFrom-Json -InputObject $b
+     $c | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
+     $c | add-member -Name "server" -Value $grafanaServer -MemberType NoteProperty
+     $json = $c | convertTo-json
 
-     while ($true)
-     {
-         if ((get-date) -ge $nextRun)
-         {
-        $nextRun = (get-date).AddSeconds($interval)
-        $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
-                    foreach ($grafanaServer in $grafanaServers){
-                        Get-GrafanaMetrics $grafanaServer
-                     }
+SendTo-Elasticsearch $json $elasticServer $elasticServerPort $elasticIndex $indexDate
+}
+catch [System.Exception]
+{
+   Write-Host "Get-GrafanaMetrics exception - $_"
+} 
+}
 
-		"Total Elapsed Time: $($elapsed.Elapsed.ToString())"
-        $TimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextRun
-    }
+while ($true)
+{
+ if ((get-date) -ge $nextRun)
+ {
+$nextRun = (get-date).AddSeconds($interval)
+$elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+	    foreach ($grafanaServer in $grafanaServers){
+		Get-GrafanaMetrics $grafanaServer
+	     }
 
-      if ([int]$($TimeDiff.TotalSeconds) -le 0) {}
-         else {
-             Write-Output "Sleeping $($TimeDiff.TotalSeconds) seconds"
-             sleep $($TimeDiff.TotalSeconds)
-         }
-         $TimeDiff = 0
-     }
+	"Total Elapsed Time: $($elapsed.Elapsed.ToString())"
+$TimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextRun
+}
+
+if ([int]$($TimeDiff.TotalSeconds) -le 0) {}
+ else {
+     Write-Output "Sleeping $($TimeDiff.TotalSeconds) seconds"
+     sleep $($TimeDiff.TotalSeconds)
+ }
+ $TimeDiff = 0
+}
