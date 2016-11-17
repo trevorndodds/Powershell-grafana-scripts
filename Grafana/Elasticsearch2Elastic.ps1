@@ -29,7 +29,7 @@ function Get-ElasticsearchClusterStats ($elasticServer)
     {
         #Cluster Health
         $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_cluster/health"
-	$ClusterName = $a.cluster_name
+        $ClusterName = $a.cluster_name
         $a | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
         $json = $a | convertTo-json
         SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
@@ -40,13 +40,6 @@ function Get-ElasticsearchClusterStats ($elasticServer)
         $json = $a | ConvertTo-Json -Depth 7
         SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
 
-        #Index Stats
-        $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_stats"
-        $a._all | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
-        $a._all | add-member -Name "@timestamp" -Value $ClusterName -MemberType NoteProperty
-        $json = $a.all | ConvertTo-Json -Depth 7
-        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
-	
         #Get Nodes
         $nodesraw = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_cat/nodes?v&h=n"
         $nodes = $nodesraw -split '[\n]' | select -skip 1 | ? { $_ -ne "" } | % { $_.Replace(" ","") }
@@ -60,6 +53,13 @@ function Get-ElasticsearchClusterStats ($elasticServer)
             $json = $a.nodes.$nodeID | ConvertTo-Json -Depth 7
             SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
             }
+
+        #Index Stats
+        $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_stats"
+        $a._all | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
+        $a._all | add-member -Name "cluster_name" -Value $ClusterName -MemberType NoteProperty
+        $json = $a._all | ConvertTo-Json -Depth 7
+        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
 
     }
        catch [System.Exception]
@@ -76,7 +76,7 @@ while ($true)
         $nextRun = (get-date).AddSeconds($interval)
         $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
         Get-ElasticsearchClusterStats $elasticServer
-		    "Total Elapsed Time: $($elapsed.Elapsed.ToString())"
+		"Total Elapsed Time: $($elapsed.Elapsed.ToString())"
         $TimeDiff = NEW-TIMESPAN –Start (get-date) –End $nextRun
     }
 
