@@ -1,19 +1,18 @@
 #Requires -version 3.0
 #ElasticSearch Cluster to Monitor
-$elasticServer = "prod_cluster"
-$elasticServerPort = 9200
+$elasticServer = "http://server1:9200"
 $interval = 60
 
 #ElasticSearch Cluster to Send Metrics
 $elasticIndex = "elasticsearch_prod_metrics"
-$elasticMonitoringCluster = "marvel_cluster"
-$elasticMonitoringClusterPort = 9200
+$elasticMonitoringCluster = "http://server2:9200"
 
-function SendTo-Elasticsearch ($json, $elasticMonitoringCluster, $elasticMonitoringClusterPort, $elasticIndex, $indexDate)
+function SendTo-Elasticsearch ($json, $elasticMonitoringCluster, $elasticIndex, $indexDate)
 {
     try
     {
-       Invoke-RestMethod "http://$elasticMonitoringCluster`:$elasticMonitoringClusterPort/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
+        Write-Host "$elasticMonitoringCluster/$elasticIndex-$indexDate/message"
+       Invoke-RestMethod "$elasticMonitoringCluster/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
     }
        catch [System.Exception]
        {
@@ -28,38 +27,39 @@ function Get-ElasticsearchClusterStats ($elasticServer)
     try
     {
         #Cluster Health
-        $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_cluster/health"
+        $a = Invoke-RestMethod -Uri "$elasticServer/_cluster/health"
         $ClusterName = $a.cluster_name
         $a | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
         $json = $a | convertTo-json
-        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
+        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticIndex $indexDate
 
         #Cluster Stats
-        $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_cluster/stats"
+        $a = Invoke-RestMethod -Uri "$elasticServer/_cluster/stats"
         $a | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
         $json = $a | ConvertTo-Json -Depth 7
-        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
+        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticIndex $indexDate
 
         #Get Nodes
-        $nodesraw = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_cat/nodes?v&h=n"
+        $nodesraw = Invoke-RestMethod -Uri "$elasticServer/_cat/nodes?v&h=n"
         $nodes = $nodesraw -split '[\n]' | select -skip 1 | ? { $_ -ne "" } | % { $_.Replace(" ","") }
 
         #Node Stats
         foreach ($node in $nodes)
             {
-            $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_nodes/$node/stats"
+            $a = Invoke-RestMethod -Uri "$elasticServer/_nodes/$node/stats"
             $nodeID = ($a.nodes | gm)[-1].Name
             $a.nodes.$nodeID | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
+            $a.nodes.$nodeID | add-member -Name "cluster_name" -Value $ClusterName -MemberType NoteProperty
             $json = $a.nodes.$nodeID | ConvertTo-Json -Depth 7
-            SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
+            SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticIndex $indexDate
             }
 
         #Index Stats
-        $a = Invoke-RestMethod -Uri "http://$elasticServer`:$elasticServerPort/_stats"
+        $a = Invoke-RestMethod -Uri "$elasticServer/_stats"
         $a._all | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
         $a._all | add-member -Name "cluster_name" -Value $ClusterName -MemberType NoteProperty
         $json = $a._all | ConvertTo-Json -Depth 7
-        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticMonitoringClusterPort $elasticIndex $indexDate
+        SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticIndex $indexDate
 
     }
        catch [System.Exception]
