@@ -11,7 +11,6 @@ function SendTo-Elasticsearch ($json, $elasticMonitoringCluster, $elasticIndex, 
 {
     try
     {
-        Write-Host "$elasticMonitoringCluster/$elasticIndex-$indexDate/message"
        Invoke-RestMethod "$elasticMonitoringCluster/$elasticIndex-$indexDate/message" -Method Post -Body $json -ContentType 'application/json'
     }
        catch [System.Exception]
