@@ -1,3 +1,5 @@
+#Requires -Version 3.0		
+# Can be installed as a windows service using nssm: https://nssm.cc
 
 [string[]]$grafanaServers = "grafana:3000"
 $interval = 60
