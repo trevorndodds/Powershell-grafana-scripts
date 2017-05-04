@@ -29,6 +29,12 @@ function Get-ElasticsearchClusterStats ($elasticServer)
         $a = Invoke-RestMethod -Uri "$elasticServer/_cluster/health"
         $ClusterName = $a.cluster_name
         $a | add-member -Name "@timestamp" -Value ([DateTime]::Now.ToUniversalTime().ToString("o")) -MemberType NoteProperty
+ 	if ($a.status -eq "green")
+            {$a | add-member -Name "status_code" -Value 0 -MemberType NoteProperty}
+        elseif ($a.status -eq "yellow")
+            {$a | add-member -Name "status_code" -Value 1 -MemberType NoteProperty}
+        elseif ($a.status -eq "red")
+            {$a | add-member -Name "status_code" -Value 2 -MemberType NoteProperty}
         $json = $a | convertTo-json
         SendTo-Elasticsearch $json $elasticMonitoringCluster $elasticIndex $indexDate
 
